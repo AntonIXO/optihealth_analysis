@@ -1,0 +1,138 @@
+analyses:
+  - name: SleepVsRestingHR
+    module: correlation
+    enabled: true
+    function: run_correlation_analysis
+    parameters:
+      metric_a: "sleep_score"
+      metric_b: "hr_resting"
+      method: "pearson" # 'pearson' for linear, 'spearman' for monotonic
+      min_data_points: 20
+      significance_threshold: 0.4 # Absolute correlation coefficient
+
+  - name: ActivityVsSleepDuration
+    module: correlation
+    enabled: true
+    function: run_correlation_analysis
+    parameters:
+      metric_a: "activity_steps"
+      metric_b: "sleep_duration_total"
+      method: "spearman"
+      min_data_points: 20
+      significance_threshold: 0.35
+
+  - name: PostWorkoutRecoveryHR
+    module: comparative
+    enabled: true
+    function: run_comparative_analysis
+    parameters:
+      event_name: "Running" # Must match event_name in the 'events' table
+      metric: "hr_resting"
+      analysis_type: "mannwhitneyu" # 'ttest' or 'mannwhitneyu' (safer default)
+      time_window_days: 1 # Compares HR on the day after a workout vs. other days
+      min_group_size: 5
+      significance_threshold: 0.05 # p-value
+
+  - name: DayTypeClustering
+    module: clustering
+    enabled: true
+    function: run_day_clustering_analysis
+    parameters:
+      # These metrics define the "character" of a day.
+      metrics_to_cluster:
+        - "activity_steps"
+        - "sleep_duration_total"
+        - "hr_resting"
+      # This is the health metric we want to see the impact on.
+      # Make sure it is NOT in 'metrics_to_cluster'.
+      outcome_metric: "hrv_rmssd"
+      n_clusters: 3 # The number of 'Day Types' to find. 3 or 4 is usually a good start.
+      min_days: 30 # The user must have at least this many complete days of data.
+
+  - name: HrvPredictors
+    module: feature_importance
+    enabled: true
+    function: run_feature_importance_analysis
+    parameters:
+      target_metric: "hrv_rmssd"
+      feature_metrics:
+        - "activity_steps"
+        - "sleep_duration_total"
+        - "sleep_duration_deep"
+        - "hr_resting"
+        - "respiratory_rate"
+      min_days: 45
+      top_n_features: 3
+
+  - name: ActivityMotivationPredictors
+    module: feature_importance
+    enabled: true
+    function: run_feature_importance_analysis
+    parameters:
+      target_metric: "activity_steps"
+      feature_metrics:
+        - "sleep_score"
+        - "sleep_duration_total"
+        - "hrv_rmssd"
+        - "hr_resting"
+      min_days: 45
+      top_n_features: 2
+    
+  - name: RestingHrPredictors
+    module: feature_importance
+    enabled: true
+    function: run_feature_importance_analysis
+    parameters:
+      target_metric: "hr_resting"
+      feature_metrics:
+        - "activity_steps"
+        - "sleep_score"
+        - "hrv_rmssd"
+        - "body_temperature"
+        - "nutrition_calories"
+      min_days: 50
+      top_n_features: 3
+  - name: RestingHR_Trend_Forecast
+    module: forecasting
+    enabled: true
+    function: run_forecasting_and_anomaly_analysis
+    parameters:
+      metric_to_forecast: "hr_resting"
+      days_to_forecast: 14
+      min_days: 60 # Prophet works best with more data
+      # For resting HR, a downward trend is positive.
+      desired_trend: "decreasing" 
+      anomaly_sensitivity: 0.99 # Higher value = fewer anomalies (more strict)
+
+  - name: SleepScore_Trend_Forecast
+    module: forecasting
+    enabled: true
+    function: run_forecasting_and_anomaly_analysis
+    parameters:
+      metric_to_forecast: "sleep_score"
+      days_to_forecast: 14
+      min_days: 60
+      # For sleep score, an upward trend is positive.
+      desired_trend: "increasing"
+      anomaly_sensitivity: 0.98
+
+  - name: HRV_Trend_Forecast
+    module: forecasting
+    enabled: true
+    function: run_forecasting_and_anomaly_analysis
+    parameters:
+      metric_to_forecast: "hrv_rmssd"
+      days_to_forecast: 7 # Shorter forecast for a more volatile metric
+      min_days: 60
+      desired_trend: "increasing"
+      anomaly_sensitivity: 0.99
+      
+  - name: Goal_Adherence_And_Streaks
+    module: goals
+    enabled: true
+    function: run_goal_adherence_analysis
+    parameters:
+      # This module doesn't need specific parameters here,
+      # as it will fetch the user's goals directly from the database.
+      # We can define a minimum streak length to be considered a significant insight.
+      min_streak_for_insight: 3 # e.g., A 3-day streak is worth mentioning.
