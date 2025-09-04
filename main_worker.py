@@ -1,10 +1,11 @@
 import yaml
 import time
 import importlib
+import logging
 from database import get_db_connection, fetch_pending_job, update_job_status, store_insights, fetch_user_goals
 from data_loader import load_and_prepare_data
 
-POLL_INTERVAL_SECONDS = 30
+POLL_INTERVAL_SECONDS = 5
 
 def load_analysis_config():
     """Loads the analysis definitions from the YAML file."""

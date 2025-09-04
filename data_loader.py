@@ -1,5 +1,6 @@
 import pandas as pd
-# from database import fetch_user_data_points, fetch_user_events # Already imported in main
+import logging
+from database import fetch_user_data_points, fetch_user_events # Already imported in main
 
 def load_and_prepare_data(conn, user_id, days=90):
     """
