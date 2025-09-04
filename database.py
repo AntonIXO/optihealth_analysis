@@ -4,20 +4,112 @@ import psycopg2.extras
 import pandas as pd
 from dotenv import load_dotenv
 import logging
+from sqlalchemy import create_engine, text
 
+# Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-def get_db_connection():
-    """Establishes a connection to the database."""
-    try:
-        conn = psycopg2.connect(DATABASE_URL)
-        return conn
-    except psycopg2.OperationalError as e:
-        logging.error(f"Could not connect to the database: {e}")
+# --- SQLAlchemy Engine ---
+# Create a single, global SQLAlchemy engine. This manages a pool of connections.
+try:
+    db_engine = create_engine(DATABASE_URL)
+    logging.info("Database engine created successfully.")
+except Exception as e:
+    logging.error(f"Failed to create database engine: {e}")
+    db_engine = None
+
+def get_raw_connection():
+    """Gets a single raw DBAPI connection from the engine's pool."""
+    if not db_engine:
+        logging.error("Database engine is not available.")
         return None
+    try:
+        return db_engine.raw_connection()
+    except Exception as e:
+        logging.error(f"Could not get a raw connection from the engine: {e}")
+        return None
+
+# --- Pandas Functions (Now use the engine directly) ---
+
+def fetch_metric_definitions():
+    """Fetches all metric definitions and returns a name -> id mapping."""
+    try:
+        df = pd.read_sql("SELECT id, metric_name FROM public.metric_definitions", db_engine)
+        return pd.Series(df.id.values, index=df.metric_name).to_dict()
+    except Exception as e:
+        logging.error(f"Error fetching metric definitions: {e}")
+        return {}
+
+def fetch_user_data_points(user_id, days=90):
+    """Fetches the last N days of data_points for a user."""
+    query = text("""
+        SELECT
+            dp.timestamp,
+            md.metric_name,
+            dp.value_numeric
+        FROM public.data_points dp
+        JOIN public.metric_definitions md ON dp.metric_id = md.id
+        WHERE dp.user_id = :user_id
+          AND dp.timestamp >= now() - interval ':days days'
+          AND dp.value_numeric IS NOT NULL;
+    """)
+    params = {'user_id': user_id, 'days': days}
+    try:
+        with db_engine.connect() as connection:
+             df = pd.read_sql(query, connection, params=params)
+        df['timestamp'] = pd.to_datetime(df['timestamp'])
+        return df
+    except Exception as e:
+        logging.error(f"Error fetching data points for user {user_id}: {e}")
+        return pd.DataFrame()
+
+def fetch_user_events(user_id, days=90):
+    """Fetches the last N days of events for a user."""
+    query = text("""
+        SELECT
+            event_name,
+            start_timestamp,
+            end_timestamp,
+            properties
+        FROM public.events
+        WHERE user_id = :user_id
+          AND start_timestamp >= now() - interval ':days days';
+    """)
+    params = {'user_id': user_id, 'days': days}
+    try:
+        with db_engine.connect() as connection:
+            df = pd.read_sql(query, connection, params=params)
+        df['start_timestamp'] = pd.to_datetime(df['start_timestamp'])
+        return df
+    except Exception as e:
+        logging.error(f"Error fetching events for user {user_id}: {e}")
+        return pd.DataFrame()
+
+def fetch_user_goals(user_id):
+    """Fetches all active goals for a given user."""
+    query = text("""
+        SELECT
+            g.goal_name,
+            md.metric_name,
+            g.target_value,
+            g.operator
+        FROM public.user_goals g
+        JOIN public.metric_definitions md ON g.metric_id = md.id
+        WHERE g.user_id = :user_id AND g.is_active = TRUE;
+    """)
+    params = {'user_id': user_id}
+    try:
+        with db_engine.connect() as connection:
+            df = pd.read_sql(query, connection, params=params)
+        return df
+    except Exception as e:
+        logging.error(f"Error fetching goals for user {user_id}: {e}")
+        return pd.DataFrame()
+
+# --- Raw Psycopg2 Functions (For transactions and updates) ---
 
 def fetch_pending_job(conn):
     """Fetches a single pending job and marks it as in_progress."""
@@ -44,49 +136,6 @@ def fetch_pending_job(conn):
             conn.rollback()
     return job
 
-def fetch_user_data_points(conn, user_id, days=90):
-    """Fetches the last N days of data_points for a user."""
-    query = """
-        SELECT
-            dp.timestamp,
-            md.metric_name,
-            dp.value_numeric
-        FROM public.data_points dp
-        JOIN public.metric_definitions md ON dp.metric_id = md.id
-        WHERE dp.user_id = %(user_id)s
-          AND dp.timestamp >= now() - interval '%(days)s days'
-          AND dp.value_numeric IS NOT NULL;
-    """
-    params = {'user_id': user_id, 'days': days}
-    try:
-        df = pd.read_sql(query, conn, params=params)
-        df['timestamp'] = pd.to_datetime(df['timestamp'])
-        return df
-    except Exception as e:
-        logging.error(f"Error fetching data points for user {user_id}: {e}")
-        return pd.DataFrame()
-
-def fetch_user_events(conn, user_id, days=90):
-    """Fetches the last N days of events for a user."""
-    query = """
-        SELECT
-            event_name,
-            start_timestamp,
-            end_timestamp,
-            properties
-        FROM public.events
-        WHERE user_id = %(user_id)s
-          AND start_timestamp >= now() - interval '%(days)s days';
-    """
-    params = {'user_id': user_id, 'days': days}
-    try:
-        df = pd.read_sql(query, conn, params=params)
-        df['start_timestamp'] = pd.to_datetime(df['start_timestamp'])
-        return df
-    except Exception as e:
-        logging.error(f"Error fetching events for user {user_id}: {e}")
-        return pd.DataFrame()
-
 def update_job_status(conn, job_id, status):
     """Updates the status of a job (completed or failed)."""
     with conn.cursor() as cur:
@@ -112,7 +161,8 @@ def store_insights(conn, insights_data):
                 cur,
                 """
                 INSERT INTO public.insights (user_id, insight_type, title, summary, result_data)
-                VALUES %s;
+                VALUES %s
+                ON CONFLICT (user_id, insight_type, generated_at) DO NOTHING;
                 """,
                 [(
                     d['user_id'],
@@ -127,25 +177,3 @@ def store_insights(conn, insights_data):
         except Exception as e:
             logging.error(f"Error storing insights: {e}")
             conn.rollback()
-            
-def fetch_user_goals(conn, user_id):
-    """Fetches all active goals for a given user."""
-    query = """
-        SELECT
-            ug.id as goal_id,
-            md.metric_name,
-            ug.target_value,
-            ug.operator,
-            ug.goal_name
-        FROM public.user_goals ug
-        JOIN public.metric_definitions md ON ug.metric_id = md.id
-        WHERE ug.user_id = %(user_id)s
-          AND ug.is_active = true;
-    """
-    params = {'user_id': user_id}
-    try:
-        df = pd.read_sql(query, conn, params=params)
-        return df.to_dict('records')
-    except Exception as e:
-        logging.error(f"Error fetching goals for user {user_id}: {e}")
-        return []

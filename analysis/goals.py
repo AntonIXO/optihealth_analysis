@@ -1,99 +1,79 @@
 import pandas as pd
 import logging
+from database import fetch_user_goals # Make sure to import the new function
 
-def _calculate_streak(daily_adherence_series):
-    """
-    Calculates the current streak of consecutive True values ending on the most recent day.
-    
-    Args:
-        daily_adherence_series (pd.Series): A boolean series indexed by date,
-                                            where True means the goal was met.
-    
-    Returns:
-        int: The length of the current streak.
-    """
-    if not isinstance(daily_adherence_series.index, pd.DatetimeIndex):
-        daily_adherence_series.index = pd.to_datetime(daily_adherence_series.index)
-
-    # Sort by date to ensure correctness
-    s = daily_adherence_series.sort_index()
-    
-    # If the most recent day was a failure, the current streak is 0
-    if not s.iloc[-1]:
+def _calculate_streak(daily_adherence: pd.Series) -> int:
+    """Calculates the current streak of True values ending today."""
+    if daily_adherence.empty or not daily_adherence.iloc[-1]:
         return 0
-        
-    # Calculate consecutive groups of True values
-    # A cumulative sum over the inverted series creates groups of consecutive Trues
-    streaks = s.cumsum()[~s].diff().fillna(s.cumsum())
     
-    # The current streak is the length of the last group of Trues
-    current_streak = (s.index.to_series().groupby(streaks).cumcount() + 1)[s].iloc[-1]
+    # Invert the series (so False is a "break") and find the first break from the end
+    breaks = (~daily_adherence).cumsum()
+    # The streak is the length of the last group of non-breaks
+    current_streak = len(daily_adherence) - breaks.idxmax() if breaks.max() > 0 and not daily_adherence.loc[breaks.idxmax()] else len(daily_adherence)
     
-    return int(current_streak)
+    # A simpler way if the above is complex for some pandas versions:
+    streak = 0
+    for met_goal in reversed(daily_adherence.values):
+        if met_goal:
+            streak += 1
+        else:
+            break
+    return streak
 
 
-def run_goal_adherence_analysis(daily_df, parameters, user_goals):
+def run_goal_adherence_analysis(daily_df, user_id, parameters):
     """
-    Analyzes user's daily data against their defined goals to find streaks.
-
-    Args:
-        daily_df (pd.DataFrame): DataFrame with metrics as columns and date as index.
-        parameters (dict): A dictionary containing analysis parameters from the config.
-        user_goals (list): A list of goal dictionaries fetched from the database.
-
-    Returns:
-        list: A list of formatted insight dictionaries, one for each significant streak.
+    Analyzes user's daily data against their active goals to find streaks.
     """
-    if not user_goals:
-        logging.info("Goals: No active goals found for this user.")
-        return []
-
     min_streak = parameters.get('min_streak_for_insight', 3)
+    
+    # 1. Fetch user's active goals
+    goals_df = fetch_user_goals(user_id)
+    if goals_df.empty:
+        return None # Return a list if multiple insights can be generated
+
     insights = []
 
-    for goal in user_goals:
-        metric = goal.get('metric_name')
-        target = goal.get('target_value')
-        op = goal.get('operator')
-        goal_name = goal.get('goal_name')
+    # 2. Evaluate each goal
+    for _, goal in goals_df.iterrows():
+        metric = goal['metric_name']
+        target = goal['target_value']
+        operator = goal['operator']
 
         if metric not in daily_df.columns:
             continue
 
-        # Create a boolean series indicating if the goal was met each day
+        # Create a boolean series for goal adherence
         metric_series = daily_df[metric].dropna()
-        if metric_series.empty:
-            continue
-
-        if op == '>=':
+        if operator == '>=':
             adherence = metric_series >= target
-        elif op == '<=':
+        elif operator == '<=':
             adherence = metric_series <= target
-        elif op == '>':
+        elif operator == '>':
             adherence = metric_series > target
-        elif op == '<':
+        elif operator == '<':
             adherence = metric_series < target
         else:
             continue
-
-        # Calculate the current streak
+        
+        # 3. Calculate streak
         current_streak = _calculate_streak(adherence)
 
-        # Generate an insight if the streak is significant
+        # 4. Generate insight if streak is significant
         if current_streak >= min_streak:
             insight = {
                 "type": "goal_streak",
                 "title": f"You're on a {current_streak}-Day Streak!",
-                "summary": f"You've successfully met your '{goal_name}' goal for {current_streak} days in a row. Keep up the great momentum!",
+                "summary": f"Great job! You've successfully met your goal of '{goal['goal_name']}' for {current_streak} days in a row.",
                 "evidence": {
-                    "goal_name": goal_name,
+                    "goal_name": goal['goal_name'],
                     "metric": metric,
-                    "streak_length": current_streak,
-                    "goal_condition": f"{op} {target}",
-                    "most_recent_value": round(metric_series.iloc[-1], 2)
+                    "target": f"{operator} {target}",
+                    "current_streak": current_streak,
+                    "days_checked": len(metric_series)
                 }
             }
             insights.append(insight)
-            logging.info(f"Found significant streak of {current_streak} days for goal '{goal_name}'")
-
-    return insights
+    
+    return insights if insights else None
