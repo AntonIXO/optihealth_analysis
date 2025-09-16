@@ -10,13 +10,13 @@ analyses:
   # 1. GOAL TRACKING
   # Analyzes progress against user-defined goals from the database.
   # ===================================================================
-  - name: GoalStreakAnalysis
-    module: goals
-    enabled: true
-    function: run_goal_adherence_analysis # Corrected function name
-    parameters:
-      # Generate a motivational insight after a 3-day goal streak.
-      min_streak_for_insight: 3
+  # - name: GoalStreakAnalysis
+  #   module: goals
+  #   enabled: true
+  #   function: run_goal_adherence_analysis # Corrected function name
+  #   parameters:
+  #     # Generate a motivational insight after a 3-day goal streak.
+  #     min_streak_for_insight: 3
 
   # ===================================================================
   # 2. CORRELATION ANALYSIS
@@ -286,3 +286,53 @@ analyses:
       desired_trend: "decreasing"
       anomaly_sensitivity: 0.98
 
+  - name: SupplementImpactDiscovery
+    module: supplements
+    enabled: true
+    # --- FIX ---
+    # The function name has been corrected to match the actual implementation
+    # in analysis/supplements.py.
+    function: find_best_supplement_impact
+    parameters:
+      # A list of key health metrics to test against.
+      # The engine will check the impact of each supplement on each of these.
+      outcome_metrics:
+        - "sleep_score"
+        - "hrv_rmssd"
+        - "hr_resting"
+        - "sleep_duration_deep"
+
+      # A list of lifestyle factors to control for in the analysis.
+      # This makes the insight more reliable by isolating the supplement's effect.
+      confounding_metrics:
+        - "activity_steps"
+        - "sleep_duration_total"
+        - "workout_duration"
+        - "workout_distance"
+        - "workout_calories_burned"
+        - "hrv_rmssd"
+        - "body_temperature"
+        - "blood_oxygen_spo2"
+        - "respiratory_rate"
+        - "sleep_duration_deep"
+        - "sleep_duration_light"
+        - "sleep_duration_rem"
+        - "sleep_duration_awake"
+        - "sleep_score"
+        - "cognitive_score"
+        - "focus"
+        - "chill"
+        - "stress"
+        - "self_control"
+        - "anger"
+        - "relaxation_index"
+        - "concentration_index"
+        - "fatigue_score"
+        - "reverse_fatigue"
+        - "alpha_gravity"
+        - "iAPF"
+        - "iAF"
+
+      # The minimum p-value to consider a finding "statistically significant".
+      # A lower value (e.g., 0.05) is more strict. 0.1 is reasonable for discovery.
+      # p_value_threshold: 0.1
