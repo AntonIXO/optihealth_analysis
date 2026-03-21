@@ -27,6 +27,29 @@ The typical workflow for an analysis job is as follows:
 7.  The worker stores these insights back into the `insights` table in the database.
 8.  The job's status is updated to `completed`.
 
+### 🚀 Quickstart & Local Development
+
+**Option 1: Using Docker (Recommended)**
+```bash
+cp .env.docker .env
+docker-compose up --build
+```
+
+**Option 2: Local Python Environment**
+```bash
+# Install dependencies using uv
+uv sync
+
+# Run the worker
+python main_worker.py
+```
+
+## 🧪 Testing
+To ensure the analysis modules are working correctly, run the test suite:
+```bash
+python test_runner.py
+```
+
 ## Analysis Modules
 
 The `analysis/` directory contains the core data science logic of the platform. Each module is responsible for a different layer of analysis:
