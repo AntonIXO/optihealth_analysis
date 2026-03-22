@@ -1,0 +1,10 @@
+version: "3.9"
+
+services:
+  worker:
+    build: .
+    image: optihealth-analysis:latest
+    env_file:
+      - .env.docker
+    restart: unless-stopped
+    command: ["uv", "run", "python", "main_worker.py"]

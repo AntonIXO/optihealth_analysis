@@ -1,0 +1,25 @@
+# Ignore VCS and local environments
+.git
+.venv
+.python-version
+
+# Python caches
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+
+# OS / editor files
+.DS_Store
+*.swp
+*.swo
+.vscode
+.idea
+
+# Env files (pass via Docker build args or secrets instead)
+.env
+
+# Data or logs
+logs/
+*.log
+**/data/**

@@ -1,0 +1,338 @@
+# OptiHealth Analysis Engine Configuration
+# This file defines all the automated analyses to be run on user health data.
+# Each block represents a specific insight to be generated.
+# Based on your active data, I've created a set of logical analyses.
+# You can disable any analysis by setting 'enabled: false'.
+# CORRECTED: Function names now match the actual implementation in the Python modules.
+
+analyses:
+  # ===================================================================
+  # 1. GOAL TRACKING
+  # Analyzes progress against user-defined goals from the database.
+  # ===================================================================
+  # - name: GoalStreakAnalysis
+  #   module: goals
+  #   enabled: true
+  #   function: run_goal_adherence_analysis # Corrected function name
+  #   parameters:
+  #     # Generate a motivational insight after a 3-day goal streak.
+  #     min_streak_for_insight: 3
+
+  # ===================================================================
+  # 2. CORRELATION ANALYSIS
+  # Finds statistical relationships between pairs of metrics.
+  # ===================================================================
+  - name: Correlate_TotalSleep_vs_Stress
+    module: correlation
+    enabled: true
+    function: run_correlation_analysis # Corrected function name
+    parameters:
+      metric_a: "sleep_duration_total"
+      metric_b: "stress"
+      method: "spearman" # Best for monotonic, not necessarily linear, relationships.
+      min_data_points: 20
+      significance_threshold: 0.35
+
+  - name: Correlate_DeepSleep_vs_HeartRate
+    module: correlation
+    enabled: true
+    function: run_correlation_analysis # Corrected function name
+    parameters:
+      metric_a: "sleep_duration_deep"
+      metric_b: "hr"
+      method: "spearman"
+      min_data_points: 20
+      significance_threshold: 0.35
+
+  - name: Correlate_Steps_vs_DeepSleep
+    module: correlation
+    enabled: true
+    function: run_correlation_analysis # Corrected function name
+    parameters:
+      metric_a: "activity_steps"
+      metric_b: "sleep_duration_deep"
+      method: "pearson" # A linear relationship is plausible here.
+      min_data_points: 20
+      significance_threshold: 0.4
+
+  - name: Correlate_WorkoutDuration_vs_Relaxation
+    module: correlation
+    enabled: true
+    function: run_correlation_analysis # Corrected function name
+    parameters:
+      metric_a: "workout_duration"
+      metric_b: "relaxation_index"
+      method: "spearman"
+      min_data_points: 20
+      significance_threshold: 0.4
+
+  - name: Correlate_Stress_vs_Focus
+    module: correlation
+    enabled: true
+    function: run_correlation_analysis # Corrected function name
+    parameters:
+      metric_a: "stress"
+      metric_b: "focus"
+      method: "spearman"
+      min_data_points: 20
+      significance_threshold: 0.4
+
+  # --- New Deeper Correlations ---
+  - name: Correlate_REMSleep_vs_Concentration
+    module: correlation
+    enabled: true
+    function: run_correlation_analysis # Corrected function name
+    parameters:
+      metric_a: "sleep_duration_rem"
+      metric_b: "concentration_index"
+      method: "spearman"
+      min_data_points: 25
+      significance_threshold: 0.4
+
+  - name: Correlate_Fatigue_vs_LightSleep
+    module: correlation
+    enabled: true
+    function: run_correlation_analysis # Corrected function name
+    parameters:
+      metric_a: "fatigue_score"
+      metric_b: "sleep_duration_light"
+      method: "spearman"
+      min_data_points: 25
+      significance_threshold: 0.4
+
+  # ===================================================================
+  # 3. COMPARATIVE ANALYSIS
+  # Compares a metric on days following an event vs. all other days.
+  # ===================================================================
+  - name: Compare_HeartRate_After_Running
+    module: comparative
+    enabled: true
+    function: run_comparative_analysis # Corrected function name
+    parameters:
+      # Assumes 'Running' is a possible value in your 'workout_type' data.
+      event_name: "Running"
+      metric: "hr"
+      analysis_type: "mannwhitneyu" # Robust non-parametric test.
+      time_window_days: 1 # Compares the day immediately after the run.
+      min_group_size: 5
+      significance_threshold: 0.05
+
+  - name: Compare_Stress_After_Workout
+    module: comparative
+    enabled: true
+    function: run_comparative_analysis # Corrected function name
+    parameters:
+      # A generic check for any workout type.
+      event_name: "Workout"
+      metric: "stress"
+      analysis_type: "mannwhitneyu"
+      time_window_days: 1
+      min_group_size: 7
+      significance_threshold: 0.05
+
+  # --- New Deeper Comparison ---
+  - name: Compare_CognitiveScore_After_Workout
+    module: comparative
+    enabled: true
+    function: run_comparative_analysis # Corrected function name
+    parameters:
+      event_name: "Workout"
+      metric: "cognitive_score"
+      analysis_type: "mannwhitneyu"
+      time_window_days: 1
+      min_group_size: 10
+      significance_threshold: 0.05
+
+
+  # ===================================================================
+  # 4. CLUSTERING ANALYSIS
+  # Discovers hidden "Day Types" by grouping days with similar metrics.
+  # ===================================================================
+  - name: Cluster_DayArchetypes_For_CognitiveScore
+    module: clustering
+    enabled: true
+    function: run_day_clustering_analysis # Corrected function name
+    parameters:
+      metrics_to_cluster:
+        - "activity_steps"
+        - "sleep_duration_total"
+        - "stress"
+        - "workout_duration"
+      # Evaluate clusters based on their average cognitive score.
+      outcome_metric: "cognitive_score"
+      # Find 4 distinct day types (e.g., Active/Rested, Stressed/Inactive, etc.)
+      n_clusters: 4
+      min_days: 30
+
+  # --- New Deeper Clustering ---
+  - name: Cluster_RecoveryArchetypes
+    module: clustering
+    enabled: true
+    function: run_day_clustering_analysis # Corrected function name
+    parameters:
+      metrics_to_cluster:
+        - "hr"
+        - "stress"
+        - "fatigue_score"
+        - "sleep_duration_deep"
+      # Evaluate clusters based on how well-recovered you are the next day.
+      outcome_metric: "reverse_fatigue"
+      n_clusters: 3
+      min_days: 35
+
+  # ===================================================================
+  # 5. FEATURE IMPORTANCE ANALYSIS
+  # Finds the most powerful predictors for a key health outcome.
+  # ===================================================================
+  - name: FeatureImportance_For_CognitiveScore
+    module: feature_importance
+    enabled: true
+    function: run_feature_importance_analysis # Corrected function name
+    parameters:
+      target_metric: "cognitive_score"
+      feature_metrics:
+        - "sleep_duration_total"
+        - "sleep_duration_deep"
+        - "sleep_duration_rem"
+        - "activity_steps"
+        - "workout_calories_burned"
+        - "stress"
+        - "fatigue_score"
+        - "hr"
+        - "concentration_index"
+      min_days: 30
+      # Report the top 3 most influential factors for cognitive performance.
+      top_n_features: 3
+
+  - name: FeatureImportance_For_Stress
+    module: feature_importance
+    enabled: true
+    function: run_feature_importance_analysis # Corrected function name
+    parameters:
+      target_metric: "stress"
+      feature_metrics:
+        - "sleep_duration_total"
+        - "sleep_duration_awake"
+        - "activity_steps"
+        - "workout_duration"
+        - "focus"
+        - "anger"
+        - "fatigue_score"
+      min_days: 30
+      top_n_features: 3
+
+  # --- New Deeper Feature Importance ---
+  - name: FeatureImportance_For_DeepSleep
+    module: feature_importance
+    enabled: true
+    function: run_feature_importance_analysis # Corrected function name
+    parameters:
+      target_metric: "sleep_duration_deep"
+      feature_metrics:
+        - "activity_steps"
+        - "workout_calories_burned"
+        - "stress"
+        - "body_temperature"
+        - "concentration_index"
+      min_days: 35
+      top_n_features: 3
+
+  # ===================================================================
+  # 6. FORECASTING ANALYSIS
+  # Analyzes trends, projects future values, and detects anomalies.
+  # ===================================================================
+  - name: Forecast_Stress_Trend
+    module: forecasting
+    enabled: true
+    function: run_forecasting_and_anomaly_analysis # Corrected function name
+    parameters:
+      metric_to_forecast: "stress"
+      days_to_forecast: 14
+      min_days: 28
+      desired_trend: "decreasing"
+      anomaly_sensitivity: 0.99
+
+  - name: Forecast_CognitiveScore_Trend
+    module: forecasting
+    enabled: true
+    function: run_forecasting_and_anomaly_analysis # Corrected function name
+    parameters:
+      metric_to_forecast: "cognitive_score"
+      days_to_forecast: 14
+      min_days: 28
+      desired_trend: "increasing"
+      anomaly_sensitivity: 0.98
+
+  - name: Forecast_ActivitySteps_Trend
+    module: forecasting
+    enabled: true
+    function: run_forecasting_and_anomaly_analysis # Corrected function name
+    parameters:
+      metric_to_forecast: "activity_steps"
+      days_to_forecast: 14
+      min_days: 28
+      desired_trend: "increasing"
+      anomaly_sensitivity: 0.98
+
+  # --- New Deeper Forecast ---
+  - name: Forecast_Fatigue_Trend
+    module: forecasting
+    enabled: true
+    function: run_forecasting_and_anomaly_analysis # Corrected function name
+    parameters:
+      metric_to_forecast: "fatigue_score"
+      days_to_forecast: 14
+      min_days: 30
+      desired_trend: "decreasing"
+      anomaly_sensitivity: 0.98
+
+  - name: SupplementImpactDiscovery
+    module: supplements
+    enabled: true
+    # --- FIX ---
+    # The function name has been corrected to match the actual implementation
+    # in analysis/supplements.py.
+    function: find_best_supplement_impact
+    parameters:
+      # A list of key health metrics to test against.
+      # The engine will check the impact of each supplement on each of these.
+      outcome_metrics:
+        - "sleep_score"
+        - "hrv_rmssd"
+        - "hr_resting"
+        - "sleep_duration_deep"
+
+      # A list of lifestyle factors to control for in the analysis.
+      # This makes the insight more reliable by isolating the supplement's effect.
+      confounding_metrics:
+        - "activity_steps"
+        - "sleep_duration_total"
+        - "workout_duration"
+        - "workout_distance"
+        - "workout_calories_burned"
+        - "hrv_rmssd"
+        - "body_temperature"
+        - "blood_oxygen_spo2"
+        - "respiratory_rate"
+        - "sleep_duration_deep"
+        - "sleep_duration_light"
+        - "sleep_duration_rem"
+        - "sleep_duration_awake"
+        - "sleep_score"
+        - "cognitive_score"
+        - "focus"
+        - "chill"
+        - "stress"
+        - "self_control"
+        - "anger"
+        - "relaxation_index"
+        - "concentration_index"
+        - "fatigue_score"
+        - "reverse_fatigue"
+        - "alpha_gravity"
+        - "iAPF"
+        - "iAF"
+
+      # The minimum p-value to consider a finding "statistically significant".
+      # A lower value (e.g., 0.05) is more strict. 0.1 is reasonable for discovery.
+      # p_value_threshold: 0.1
