@@ -19,9 +19,13 @@ def run_forecasting_and_anomaly_analysis(daily_df, parameters):
     # --- Start of Fix ---
     # Create the DataFrame for Prophet directly with the correct column names ('ds', 'y').
     # This avoids the error-prone rename step.
+    # NOTE: daily_df.index holds datetime.date objects (dtype=object) because it
+    # is built from `.dt.date` in data_loader. Prophet emits 'ds' as
+    # datetime64[ns], so the later merge on 'ds' fails with a dtype mismatch.
+    # Coerce to datetime64 up front so prophet_df['ds'] and forecast['ds'] align.
     prophet_df = pd.DataFrame({
-        'ds': daily_df.index,
-        'y': daily_df[metric]
+        'ds': pd.to_datetime(daily_df.index),
+        'y': daily_df[metric].values
     }).dropna()
     # --- End of Fix ---
 
