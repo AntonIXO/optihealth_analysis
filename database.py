@@ -200,38 +200,44 @@ def fetch_user_goals(user_id):
 
 def fetch_user_supplement_component_logs(user_id, days=365):
     """
-    Fetches and calculates the total daily dosage for each supplement COMPONENT.
-    This is the new, more powerful query for the multi-component architecture.
+    Fetches the total daily dosage per supplement SUBSTANCE for a user.
+
+    Reads the analysis-optimized view public.analysis_daily_supplement_intake
+    (created by the 20260630160000 migration), which rolls every supplement_log
+    up to the substance grain (e.g. Magnesium Citrate + Magnesium L-Threonate ->
+    "Magnesium") and sums calculated_dosage_mg per user/day/substance. This
+    replaces the old 3-table join against supplement_products /
+    product_component_link / supplement_components, which no longer exist after
+    the web app migrated to the "Chapter 15" ontology (that join raised
+    UndefinedTable on every run).
+
+    The return contract (columns: date, component_name, total_daily_amount) is
+    unchanged, so data_loader.load_and_prepare_data and analysis/supplements.py
+    need no changes.
     """
     engine = get_db_engine()
     if not engine:
         return pd.DataFrame()
-        
+
     query = text("""
         SELECT
-            sl.timestamp::date AS date,
-            sc.supplement_name AS component_name,
-            SUM(sl.servings * pcl.amount) AS total_daily_amount
-        FROM public.supplement_logs sl
-        JOIN public.supplement_products sp ON sl.product_id = sp.id
-        JOIN public.product_component_link pcl ON sp.id = pcl.product_id
-        JOIN public.supplement_components sc ON pcl.component_id = sc.id
-        WHERE sl.user_id = :user_id
-          AND sl.timestamp >= NOW() - MAKE_INTERVAL(days => :days)
-        GROUP BY
-            sl.timestamp::date,
-            sc.supplement_name
+            day              AS date,
+            substance_name   AS component_name,
+            total_dosage_mg  AS total_daily_amount
+        FROM public.analysis_daily_supplement_intake
+        WHERE user_id = :user_id
+          AND day >= (NOW() - MAKE_INTERVAL(days => :days))::date
         ORDER BY
-            date,
-            component_name;
+            day,
+            substance_name;
     """)
     params = {'user_id': str(user_id), 'days': days}
     try:
         with engine.connect() as conn:
             df = pd.read_sql(query, conn, params=params)
-        # The date is already truncated in the query, but ensure it's the correct type
+        # The date is already a DATE in the view; ensure it's the correct type.
         df['date'] = pd.to_datetime(df['date'])
         return df
     except Exception as e:
-        logging.error(f"Error fetching supplement component logs for user {user_id}: {e}")
+        logging.error(f"Error fetching supplement substance logs for user {user_id}: {e}")
         return pd.DataFrame()
