@@ -4,6 +4,7 @@ from sqlalchemy import create_engine, text
 from dotenv import load_dotenv
 import logging
 import json
+from datetime import datetime, timedelta, timezone
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -82,25 +83,33 @@ def store_insights(insights_data):
     """Stores a batch of generated insights into the database."""
     if not insights_data:
         return
-        
+
     engine = get_db_engine()
     if not engine:
         return
 
+    # The table has UNIQUE(user_id, insight_type, generated_at). A single batch
+    # now legitimately contains MANY insights of the same type (e.g. dozens of
+    # discovered correlations), so a constant NOW() would collapse them via
+    # ON CONFLICT. Assign each row a distinct generated_at (microsecond-stepped
+    # from a single base) so every distinct insight is persisted, while repeated
+    # identical batches across worker runs still differ in time (as before).
     insert_stmt = text("""
         INSERT INTO public.insights (user_id, insight_type, title, summary, result_data, generated_at)
-        VALUES (:user_id, :insight_type, :title, :summary, :result_data, NOW())
+        VALUES (:user_id, :insight_type, :title, :summary, :result_data, :generated_at)
         ON CONFLICT (user_id, insight_type, generated_at) DO NOTHING;
     """)
-    
+
+    base = datetime.now(timezone.utc)
     formatted_data = [
         {
             'user_id': d['user_id'],
             'insight_type': d['type'],
             'title': d['title'],
             'summary': d['summary'],
-            'result_data': json.dumps(d['evidence'])
-        } for d in insights_data
+            'result_data': json.dumps(d['evidence']),
+            'generated_at': base + timedelta(microseconds=i),
+        } for i, d in enumerate(insights_data)
     ]
 
     try:
@@ -112,7 +121,7 @@ def store_insights(insights_data):
         logging.error(f"Error storing insights: {e}")
 
 # --- Data Fetching Functions ---
-def fetch_user_data_points(user_id, days=90):
+def fetch_user_data_points(user_id, days=365):
     """Fetches the last N days of data_points for a user."""
     engine = get_db_engine()
     if not engine:
@@ -139,7 +148,7 @@ def fetch_user_data_points(user_id, days=90):
         logging.error(f"Error fetching data points for user {user_id}: {e}")
         return pd.DataFrame()
 
-def fetch_user_events(user_id, days=90):
+def fetch_user_events(user_id, days=365):
     """Fetches the last N days of events for a user."""
     engine = get_db_engine()
     if not engine:
@@ -189,7 +198,7 @@ def fetch_user_goals(user_id):
         logging.error(f"Error fetching goals for user {user_id}: {e}")
         return pd.DataFrame()
 
-def fetch_user_supplement_component_logs(user_id, days=90):
+def fetch_user_supplement_component_logs(user_id, days=365):
     """
     Fetches and calculates the total daily dosage for each supplement COMPONENT.
     This is the new, more powerful query for the multi-component architecture.
@@ -226,4 +235,3 @@ def fetch_user_supplement_component_logs(user_id, days=90):
     except Exception as e:
         logging.error(f"Error fetching supplement component logs for user {user_id}: {e}")
         return pd.DataFrame()
-
