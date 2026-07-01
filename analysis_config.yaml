@@ -7,6 +7,47 @@
 
 analyses:
   # ===================================================================
+  # 0. CORRELATION DISCOVERY (auto)  -- supersedes the hand-picked
+  #    correlation pairs below. Scans ALL metric pairs over the full year,
+  #    keeps only links that pass |r|, p-value AND Benjamini-Hochberg FDR.
+  #    Tuned on Anton's real data (2026-07-01): yields ~23 honest hits vs
+  #    the 1 the hardcoded list could find.
+  # ===================================================================
+  - name: AutoCorrelationDiscovery
+    module: correlation_discovery
+    enabled: true
+    function: run_correlation_discovery
+    parameters:
+      method: "spearman"
+      min_data_points: 25
+      min_abs_r: 0.35
+      max_p: 0.05
+      max_q: 0.10          # FDR (Benjamini-Hochberg) across all tested pairs
+      top_k: 15            # cap to avoid dashboard spam; ranked by |r|
+      exclude_pairs:
+        - ["workout_distance", "workout_duration"]
+
+  # ===================================================================
+  # 0b. LAGGED CORRELATION DISCOVERY (auto)  -- next-day carry-over
+  #     physiology that same-day correlation is blind to
+  #     (e.g. HRV today -> lower stress tomorrow). Same FDR gating.
+  # ===================================================================
+  - name: AutoLaggedCorrelationDiscovery
+    module: lagged_correlation
+    enabled: true
+    function: run_lagged_correlation_discovery
+    parameters:
+      method: "spearman"
+      lag_days: 1
+      min_data_points: 25
+      min_abs_r: 0.35
+      max_p: 0.05
+      max_q: 0.10
+      top_k: 15
+      exclude_pairs:
+        - ["workout_distance", "workout_duration"]
+
+  # ===================================================================
   # 1. GOAL TRACKING
   # Analyzes progress against user-defined goals from the database.
   # ===================================================================
@@ -19,12 +60,12 @@ analyses:
   #     min_streak_for_insight: 3
 
   # ===================================================================
-  # 2. CORRELATION ANALYSIS
-  # Finds statistical relationships between pairs of metrics.
+  # 2. CORRELATION ANALYSIS (LEGACY, hand-picked)
+  # Superseded by AutoCorrelationDiscovery above. Kept disabled for reference.
   # ===================================================================
   - name: Correlate_TotalSleep_vs_Stress
     module: correlation
-    enabled: true
+    enabled: false  # superseded by AutoCorrelationDiscovery
     function: run_correlation_analysis # Corrected function name
     parameters:
       metric_a: "sleep_duration_total"
@@ -35,7 +76,7 @@ analyses:
 
   - name: Correlate_DeepSleep_vs_HeartRate
     module: correlation
-    enabled: true
+    enabled: false  # superseded by AutoCorrelationDiscovery
     function: run_correlation_analysis # Corrected function name
     parameters:
       metric_a: "sleep_duration_deep"
@@ -46,7 +87,7 @@ analyses:
 
   - name: Correlate_Steps_vs_DeepSleep
     module: correlation
-    enabled: true
+    enabled: false  # superseded by AutoCorrelationDiscovery
     function: run_correlation_analysis # Corrected function name
     parameters:
       metric_a: "activity_steps"
@@ -57,7 +98,7 @@ analyses:
 
   - name: Correlate_WorkoutDuration_vs_Relaxation
     module: correlation
-    enabled: true
+    enabled: false  # superseded by AutoCorrelationDiscovery
     function: run_correlation_analysis # Corrected function name
     parameters:
       metric_a: "workout_duration"
@@ -68,7 +109,7 @@ analyses:
 
   - name: Correlate_Stress_vs_Focus
     module: correlation
-    enabled: true
+    enabled: false  # superseded by AutoCorrelationDiscovery
     function: run_correlation_analysis # Corrected function name
     parameters:
       metric_a: "stress"
@@ -80,7 +121,7 @@ analyses:
   # --- New Deeper Correlations ---
   - name: Correlate_REMSleep_vs_Concentration
     module: correlation
-    enabled: true
+    enabled: false  # superseded by AutoCorrelationDiscovery
     function: run_correlation_analysis # Corrected function name
     parameters:
       metric_a: "sleep_duration_rem"
@@ -91,7 +132,7 @@ analyses:
 
   - name: Correlate_Fatigue_vs_LightSleep
     module: correlation
-    enabled: true
+    enabled: false  # superseded by AutoCorrelationDiscovery
     function: run_correlation_analysis # Corrected function name
     parameters:
       metric_a: "fatigue_score"

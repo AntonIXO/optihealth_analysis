@@ -51,10 +51,14 @@ def run_insight_engine(user_id, job_id):
             else: # For correlation, clustering, feature_importance, forecasting, goals
                 result = analysis_function(daily_summary_df, params_with_name)
 
-            # 4. Collect significant results
+            # 4. Collect significant results.
+            # Modules may return a single insight dict OR a list of insight dicts
+            # (correlation_discovery, lagged_correlation, goals). Normalise both.
             if result:
-                result['user_id'] = user_id
-                significant_insights.append(result)
+                results = result if isinstance(result, list) else [result]
+                for item in results:
+                    item['user_id'] = user_id
+                    significant_insights.append(item)
 
         except Exception as e:
             logging.error(f"Error running analysis '{analysis_def['name']}' for user {user_id}: {e}", exc_info=True)

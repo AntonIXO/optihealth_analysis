@@ -6,7 +6,7 @@ from database import (
     fetch_user_supplement_component_logs
 )
 
-def load_and_prepare_data(user_id, days=90):
+def load_and_prepare_data(user_id, days=365):
     """
     Loads all relevant data for a user and prepares it for analysis.
     
@@ -54,4 +54,3 @@ def load_and_prepare_data(user_id, days=90):
 
 
     return daily_summary_df, events_df, daily_supplements_df
-
