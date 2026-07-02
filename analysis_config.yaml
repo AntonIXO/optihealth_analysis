@@ -28,9 +28,10 @@ analyses:
         - ["workout_distance", "workout_duration"]
 
   # ===================================================================
-  # 0b. LAGGED CORRELATION DISCOVERY (auto)  -- next-day carry-over
-  #     physiology that same-day correlation is blind to
-  #     (e.g. HRV today -> lower stress tomorrow). Same FDR gating.
+  # 0b. LAGGED CORRELATION DISCOVERY (auto)  -- multi-horizon carry-over
+  #     physiology that same-day correlation is blind to (e.g. HRV today ->
+  #     lower stress tomorrow; training -> deep sleep a week later).
+  #     One FDR family across all lags; best lag kept per directed pair.
   # ===================================================================
   - name: AutoLaggedCorrelationDiscovery
     module: lagged_correlation
@@ -38,7 +39,7 @@ analyses:
     function: run_lagged_correlation_discovery
     parameters:
       method: "spearman"
-      lag_days: 1
+      lag_days: [1, 2, 3, 7]   # multi-horizon; one FDR family across all lags
       min_data_points: 25
       min_abs_r: 0.35
       max_p: 0.05
@@ -69,6 +70,43 @@ analyses:
         - { a: "hr_resting", b: "hrv_rmssd", control: "sleep_duration_deep" }
         - { a: "anger", b: "self_control", control: "stress" }
         - { a: "cognitive_score", b: "focus", control: "concentration_index" }
+
+  # ===================================================================
+  # 0d. WEEKLY RHYTHM (Cyclical Time, whitepaper Ch. 13) -- does a metric
+  #     vary by day-of-week / weekend vs weekday? FDR across metrics.
+  # ===================================================================
+  - name: WeeklyRhythmAnalysis
+    module: cyclical
+    enabled: true
+    function: run_weekly_rhythm_analysis
+    parameters:
+      min_data_points: 60
+      min_per_weekday: 5
+      max_p: 0.05
+      max_q: 0.10
+      top_k: 10
+
+  # ===================================================================
+  # 0e. DAY VECTOR ("Everything is a Vector", whitepaper Ch. 8, classical)
+  #     Turns each day into a z-scored vector and derives holistic insights:
+  #     multi-variate anomaly days, day-type archetypes, and similar-days.
+  # ===================================================================
+  - name: DayVectorAnalysis
+    module: day_vector
+    enabled: true
+    function: run_day_vector_analysis
+    parameters:
+      min_obs_per_metric: 100     # only well-covered metrics enter the vector
+      min_dims_per_day: 6         # a day needs >=6 filled dims to be embedded
+      add_cyclical: true          # append sin/cos day-of-week
+      anomaly_percentile: 97.5
+      max_anomalies: 5
+      recent_anomaly_window_days: 120
+      k_range: [2, 3, 4, 5, 6]
+      min_silhouette: 0.15
+      outcome_metric: "cognitive_score"   # optional cluster-outcome gate
+      max_anova_p: 0.05
+      n_similar: 5
 
   # ===================================================================
   # 1. GOAL TRACKING
