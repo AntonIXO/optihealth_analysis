@@ -3,7 +3,7 @@ import time
 import logging
 import importlib
 from data_loader import load_and_prepare_data
-from database import fetch_pending_job, update_job_status, store_insights
+from database import fetch_pending_job, update_job_status, store_insights, fetch_user_day_tags
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -21,6 +21,9 @@ def run_insight_engine(user_id, job_id):
 
     # 1. Load all data streams for the user
     daily_summary_df, events_df, daily_supplements_df = load_and_prepare_data(user_id)
+    # Day-tags are loaded separately (long frame: day, tag_name) so the
+    # load_and_prepare_data 3-tuple signature stays stable.
+    day_tags_df = fetch_user_day_tags(user_id)
 
     # 2. Load analysis configuration
     config = load_analysis_config()
@@ -46,6 +49,8 @@ def run_insight_engine(user_id, job_id):
             # Call the correct function with the right data arguments
             if module_name == 'supplements':
                 result = analysis_function(daily_summary_df, daily_supplements_df, params_with_name)
+            elif module_name == 'tag_impact':
+                result = analysis_function(daily_summary_df, day_tags_df, params_with_name)
             elif module_name == 'comparative':
                 result = analysis_function(daily_summary_df, events_df, params_with_name)
             else: # For correlation, clustering, feature_importance, forecasting, goals
