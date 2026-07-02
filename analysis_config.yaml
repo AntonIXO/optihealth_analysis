@@ -48,6 +48,29 @@ analyses:
         - ["workout_distance", "workout_duration"]
 
   # ===================================================================
+  # 0c. PARTIAL CORRELATION  -- for a curated set of (a, b, control) triples,
+  #     report whether a raw link SURVIVES or COLLAPSES once an obvious
+  #     confound is held constant. Separates genuine links from confounded ones.
+  # ===================================================================
+  - name: PartialCorrelationAnalysis
+    module: partial_correlation
+    enabled: true
+    function: run_partial_correlation_analysis
+    parameters:
+      min_data_points: 25
+      min_abs_r: 0.30
+      max_raw_p: 0.05
+      top_k: 15
+      triples:
+        - { a: "focus", b: "cognitive_score", control: "stress" }
+        - { a: "stress", b: "hr", control: "hrv_rmssd" }
+        - { a: "activity_steps", b: "sleep_duration_deep", control: "sleep_duration_total" }
+        - { a: "concentration_index", b: "relaxation_index", control: "stress" }
+        - { a: "hr_resting", b: "hrv_rmssd", control: "sleep_duration_deep" }
+        - { a: "anger", b: "self_control", control: "stress" }
+        - { a: "cognitive_score", b: "focus", control: "concentration_index" }
+
+  # ===================================================================
   # 1. GOAL TRACKING
   # Analyzes progress against user-defined goals from the database.
   # ===================================================================
@@ -188,6 +211,7 @@ analyses:
   # ===================================================================
   # 4. CLUSTERING ANALYSIS
   # Discovers hidden "Day Types" by grouping days with similar metrics.
+  # Gated on cluster separation (silhouette) AND outcome separation (ANOVA).
   # ===================================================================
   - name: Cluster_DayArchetypes_For_CognitiveScore
     module: clustering
@@ -204,6 +228,8 @@ analyses:
       # Find 4 distinct day types (e.g., Active/Rested, Stressed/Inactive, etc.)
       n_clusters: 4
       min_days: 30
+      min_silhouette: 0.15   # clusters must be genuinely separated
+      max_anova_p: 0.05      # clusters must differ in the outcome metric
 
   # --- New Deeper Clustering ---
   - name: Cluster_RecoveryArchetypes
@@ -220,10 +246,13 @@ analyses:
       outcome_metric: "reverse_fatigue"
       n_clusters: 3
       min_days: 35
+      min_silhouette: 0.15
+      max_anova_p: 0.05
 
   # ===================================================================
   # 5. FEATURE IMPORTANCE ANALYSIS
   # Finds the most powerful predictors for a key health outcome.
+  # Gated on cross-validated R^2 (model must generalize out-of-sample).
   # ===================================================================
   - name: FeatureImportance_For_CognitiveScore
     module: feature_importance
@@ -244,6 +273,7 @@ analyses:
       min_days: 30
       # Report the top 3 most influential factors for cognitive performance.
       top_n_features: 3
+      min_cv_r2: 0.05        # require the model to generalize out-of-sample
 
   - name: FeatureImportance_For_Stress
     module: feature_importance
@@ -261,6 +291,7 @@ analyses:
         - "fatigue_score"
       min_days: 30
       top_n_features: 3
+      min_cv_r2: 0.05        # require the model to generalize out-of-sample
 
   # --- New Deeper Feature Importance ---
   - name: FeatureImportance_For_DeepSleep
@@ -277,6 +308,7 @@ analyses:
         - "concentration_index"
       min_days: 35
       top_n_features: 3
+      min_cv_r2: 0.05        # require the model to generalize out-of-sample
 
   # ===================================================================
   # 6. FORECASTING ANALYSIS
