@@ -109,6 +109,27 @@ analyses:
       n_similar: 5
 
   # ===================================================================
+  # 0f. TAG IMPACT -- treats user day-tags (e.g. "sleep-cube", "sauna") as
+  #     interventions and measures their same-day/next-day effect on metrics,
+  #     with a vector-matched (propensity-style) confirmation. FDR across the
+  #     (tag x metric x horizon) family. Silent until the user tags >= min days.
+  # ===================================================================
+  - name: TagImpactAnalysis
+    module: tag_impact
+    enabled: true
+    function: run_tag_impact_analysis
+    parameters:
+      min_tagged_days: 5
+      min_untagged_days: 5
+      horizons: [0, 1]         # same day + next day
+      max_p: 0.05
+      max_q: 0.10
+      top_k: 15
+      min_abs_effect: 0.30     # |rank-biserial|
+      min_obs_per_metric: 60
+      min_dims_per_day: 5
+
+  # ===================================================================
   # 1. GOAL TRACKING
   # Analyzes progress against user-defined goals from the database.
   # ===================================================================
