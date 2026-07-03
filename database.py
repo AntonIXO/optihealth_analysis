@@ -241,3 +241,33 @@ def fetch_user_supplement_component_logs(user_id, days=365):
     except Exception as e:
         logging.error(f"Error fetching supplement substance logs for user {user_id}: {e}")
         return pd.DataFrame()
+
+
+def fetch_user_day_tags(user_id, days=365):
+    """
+    Fetches the user's day-tag assignments as a long frame with columns
+    [day, tag_name], read from the public.analysis_day_tags view (created by the
+    20260702210000 migration). One row per (day, tag). Used by the tag_impact
+    analysis module to treat tags as interventions/conditions.
+    """
+    engine = get_db_engine()
+    if not engine:
+        return pd.DataFrame()
+
+    query = text("""
+        SELECT day, tag_name
+        FROM public.analysis_day_tags
+        WHERE user_id = :user_id
+          AND day >= (NOW() - MAKE_INTERVAL(days => :days))::date
+        ORDER BY day, tag_name;
+    """)
+    params = {'user_id': str(user_id), 'days': days}
+    try:
+        with engine.connect() as conn:
+            df = pd.read_sql(query, conn, params=params)
+        if not df.empty:
+            df['day'] = pd.to_datetime(df['day'])
+        return df
+    except Exception as e:
+        logging.error(f"Error fetching day tags for user {user_id}: {e}")
+        return pd.DataFrame()
