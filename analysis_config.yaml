@@ -90,6 +90,9 @@ analyses:
   # 0e. DAY VECTOR ("Everything is a Vector", whitepaper Ch. 8, classical)
   #     Turns each day into a z-scored vector and derives holistic insights:
   #     multi-variate anomaly days, day-type archetypes, and similar-days.
+  #     NOTE: this is the CLASSICAL statistical descriptor (no training) --
+  #     the complementary counterpart to the learned optiHealth-EiV temporal
+  #     encoder, not a replacement for it.
   # ===================================================================
   - name: DayVectorAnalysis
     module: day_vector
@@ -128,6 +131,26 @@ analyses:
       min_abs_effect: 0.30     # |rank-biserial|
       min_obs_per_metric: 60
       min_dims_per_day: 5
+
+  # ===================================================================
+  # 0g. CHANGE-POINT / REGIME SHIFT -- dates sustained baseline shifts in a
+  #     metric (e.g. resting HR stepped up in late Jan). CUSUM + bootstrap,
+  #     binary segmentation, FDR across metrics. The "when did my baseline
+  #     change?" question that correlation/forecasting can't answer.
+  # ===================================================================
+  - name: ChangePointAnalysis
+    module: change_point
+    enabled: true
+    function: run_change_point_analysis
+    parameters:
+      min_obs_per_metric: 80
+      min_segment_len: 21      # each regime must be >= 3 weeks
+      min_confidence: 0.95     # bootstrap confidence a change exists
+      min_shift_sd: 0.6        # only report level shifts >= 0.6 SD
+      n_bootstrap: 1000
+      max_depth: 3             # up to ~2^3 segments per metric
+      top_k: 12
+      max_q: 0.10              # FDR across metrics
 
   # ===================================================================
   # 1. GOAL TRACKING
